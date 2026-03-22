@@ -234,7 +234,7 @@ The Coding Agent doesn't just write code and stop. It runs automated validation 
 ---
 
 *Detection Duet — Conference Notes*
-*Compiled by **Threatcraft** · THOR Collective*
+*Compiled by **Threatcraft** *
 *Based on live talk slides, Verkada Security Engineering*
 
 *Stack: Grove · Substation · StreamAlert · Tracecat · AWS Bedrock · Lambda · Athena · S3 · DataCatalog · Linear · GitHub · MITRE ATT&CK*
