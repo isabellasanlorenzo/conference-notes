@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.13/html-to-image.min.js" integrity="sha512-iZ2ORl595Wx6miw+GuadDet4WQbdSWS3JLMoNfY8cRGoEFy6oT3G9IbcrBeL6AfkgpA51ETt/faX6yLV+/gFJg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script>
+      (function() {
+        const originalConsole = window.console;
+        window.console = {
+          log: (...args) => {
+            originalConsole.log(...args);
+            window.parent.postMessage({ type: 'console', message: args.join(' ') }, '*');
+          },
+          error: (...args) => {
+            originalConsole.error(...args);
+            window.parent.postMessage({ type: 'console', message: 'Error: ' + args.join(' ') }, '*');
+          },
+          warn: (...args) => {
+            originalConsole.warn(...args);
+            window.parent.postMessage({ type: 'console', message: 'Warning: ' + args.join(' ') }, '*');
+          }
+        };
+
+        let requestId = 0;
+        let callbacksMap = new Map();
+        let streamControllers = new Map();
+        
+        window.claude = {
+          complete: (prompt) => {
+            return new Promise((resolve, reject) => {
+              const id = requestId++;
+              callbacksMap.set(id, { resolve, reject });
+              window.parent.postMessage({ type: 'claudeComplete', id, prompt }, '*');
+            });
+          }
+        };
+
+        window.storage = {
+          get: (key, shared = false) => {
+            return new Promise((resolve, reject) => {
+              const id = requestId++;
+              callbacksMap.set(id, { resolve, reject });
+              window.parent.postMessage({ type: 'storageGet', id, key, shared }, '*');
+            });
+          },
+          set: (key, value, shared = false) => {
+            return new Promise((resolve, reject) => {
+              const id = requestId++;
+              callbacksMap.set(id, { resolve, reject });
+              window.parent.postMessage({ type: 'storageSet', id, key, value, shared }, '*');
+            });
+          },
+          delete: (key, shared = false) => {
+            return new Promise((resolve, reject) => {
+              const id = requestId++;
+              callbacksMap.set(id, { resolve, reject });
+              window.parent.postMessage({ type: 'storageDelete', id, key, shared }, '*');
+            });
+          },
+          list: (prefix, shared = false) => {
+            return new Promise((resolve, reject) => {
+              const id = requestId++;
+              callbacksMap.set(id, { resolve, reject });
+              window.parent.postMessage({ type: 'storageList', id, prefix, shared }, '*');
+            });
+          }
+        };
+
+        let pendingBlobs = new Map();
+        URL.createObjectURL = (blob) => {
+          // Store the blob and create an ID and URL for it
+          const blobId = `blob-${Date.now()}-${Math.random()}`;
+          pendingBlobs.set(blobId, blob);
+          return `blob-request://${blobId}`;
+        };
+
+        URL.revokeObjectURL = (url) => {
+          // Remove the blob from our store
+          const blobId = url.replace("blob-request://", "");
+          pendingBlobs.delete(blobId);
+        };
+
+        const getBlobFromURL = (url) => {
+          const blobId = url.replace("blob-request://", "");
+          return pendingBlobs.get(blobId);
+        };
+
+        // Override global fetch with streaming support
+        window.fetch = (url, init = {}) => {
+          return new Promise((resolve, reject) => {
+            const id = requestId++;
+            const channelId = `fetch-${id}-${Date.now()}`;
+            
+            callbacksMap.set(id, { 
+              resolve: (response) => {
+                // Create a ReadableStream for the response body
+                const stream = new ReadableStream({
+                  start(controller) {
+                    streamControllers.set(channelId, controller);
+                  },
+                  cancel() {
+                    streamControllers.delete(channelId);
+                  }
+                });
+                
+                // Create and return the Response with the stream
+                resolve(new Response(stream, {
+                  status: response.status,
+                  statusText: response.statusText,
+                  headers: response.headers
+                }));
+              },
+              reject,
+              channelId
+            });
+            
+            window.parent.postMessage({
+              type: 'proxyFetch',
+              id,
+              url,
+              init,
+              channelId
+            }, '*');
+          });
+        };
+
+        window.addEventListener('message', async (event) => {
+          if (event.data.type === 'takeScreenshot') {
+            const rootElement = document.getElementById('artifacts-component-root-html');
+            if (!rootElement) {
+              window.parent.postMessage({
+                type: 'screenshotError',
+                error: new Error('Root element not found'),
+              }, '*');
+            }
+            const screenshot = await htmlToImage.toPng(rootElement, {
+              imagePlaceholder:
+                "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAA1JREFUGFdjePDgwX8ACOQDoNsk0PMAAAAASUVORK5CYII=",
+            });
+            window.parent.postMessage({
+              type: 'screenshotData',
+              data: screenshot,
+            }, '*');
+          } else if (event.data.type === 'claudeComplete') {
+            const callback = callbacksMap.get(event.data.id);
+            if (event.data.error) {
+              callback.reject(new Error(event.data.error));
+            } else {
+              callback.resolve(event.data.completion);
+            }
+            callbacksMap.delete(event.data.id);
+          } else if (event.data.type === 'proxyFetchResponse') {
+            const callback = callbacksMap.get(event.data.id);
+            if (event.data.error) {
+              callback.reject(new Error(event.data.error));
+              callbacksMap.delete(event.data.id);
+            } else {
+              // Initial response with headers, status, etc.
+              callback.resolve({
+                status: event.data.status,
+                statusText: event.data.statusText,
+                headers: event.data.headers
+              });
+              // Don't delete the callback yet if streaming
+              if (!event.data.body) {
+                callbacksMap.delete(event.data.id);
+              }
+            }
+          } else if (event.data.type === 'proxyFetchStream') {
+            // Handle streaming data chunks
+            const controller = streamControllers.get(event.data.channelId);
+            if (controller) {
+              if (event.data.error) {
+                controller.error(new Error(event.data.error));
+                streamControllers.delete(event.data.channelId);
+              } else if (event.data.done) {
+                controller.close();
+                streamControllers.delete(event.data.channelId);
+                // Clean up the callback
+                const callback = Array.from(callbacksMap.entries()).find(
+                  ([_, value]) => value.channelId === event.data.channelId
+                );
+                if (callback) {
+                  callbacksMap.delete(callback[0]);
+                }
+              } else if (event.data.chunk) {
+                controller.enqueue(new Uint8Array(event.data.chunk));
+              }
+            }
+          } else if (event.data.type === 'storageGet') {
+            const callback = callbacksMap.get(event.data.id);
+            if (event.data.error) {
+              callback.reject(new Error(event.data.error));
+            } else {
+              callback.resolve(event.data.result);
+            }
+            callbacksMap.delete(event.data.id);
+          } else if (event.data.type === 'storageSet') {
+            const callback = callbacksMap.get(event.data.id);
+            if (event.data.error) {
+              callback.reject(new Error(event.data.error));
+            } else {
+              callback.resolve(event.data.result);
+            }
+            callbacksMap.delete(event.data.id);
+          } else if (event.data.type === 'storageDelete') {
+            const callback = callbacksMap.get(event.data.id);
+            if (event.data.error) {
+              callback.reject(new Error(event.data.error));
+            } else {
+              callback.resolve(event.data.result);
+            }
+            callbacksMap.delete(event.data.id);
+          } else if (event.data.type === 'storageList') {
+            const callback = callbacksMap.get(event.data.id);
+            if (event.data.error) {
+              callback.reject(new Error(event.data.error));
+            } else {
+              callback.resolve(event.data.result);
+            }
+            callbacksMap.delete(event.data.id);
+          }
+        });
+
+        window.addEventListener('click', (event) => {
+          const isEl = event.target instanceof HTMLElement;
+          if (!isEl) return;
+    
+          // find ancestor links
+          const linkEl = event.target.closest("a");
+          if (!linkEl || !linkEl.href) return;
+    
+          event.preventDefault();
+          event.stopImmediatePropagation();
+    
+          if (linkEl.href.startsWith("blob-request:")) {
+            const blob = getBlobFromURL(linkEl.href);
+            if (!blob) return;
+            void blob.arrayBuffer().then((data) => {
+              window.parent.postMessage({
+                type: "downloadFile",
+                filename: linkEl.download,
+                data,
+                mimeType: blob.type || "application/octet-stream",
+              });
+            });
+          } else if (linkEl.href.startsWith("data:")) {
+            const [header, base64Data] = linkEl.href.split(",");
+            const mimeMatch = header.match(/data:([^;]+)/);
+            const mimeType = mimeMatch ? mimeMatch[1] : "application/octet-stream";
+            const binaryString = atob(base64Data);
+            const data = Uint8Array.from(binaryString, (c) =>
+              c.charCodeAt(0),
+            ).buffer;
+            window.parent.postMessage({
+              type: "downloadFile",
+              filename: linkEl.download,
+              data,
+              mimeType,
+            });
+          } else {
+            let linkUrl;
+            try {
+              linkUrl = new URL(linkEl.href);
+            } catch (error) {
+              return;
+            }
+    
+            if (linkUrl.hostname === window.location.hostname) return;
+      
+            window.parent.postMessage({
+              type: 'openExternal',
+              href: linkEl.href,
+            }, '*');
+          }
+      });
+
+        const originalOpen = window.open;
+        window.open = function (url) {
+          window.parent.postMessage({
+            type: "openExternal",
+            href: url,
+          }, "*");
+        };
+
+        window.addEventListener('error', (event) => {
+          window.parent.postMessage({ type: 'console', message: 'Uncaught Error: ' + event.message }, '*');
+        });
+      })();
+    </script>
+  
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GCD Talk Notes — Organized</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent: #185FA5;
+      --accent-light: #E6F1FB;
+      --accent-mid: #378ADD;
+      --bg: #ffffff;
+      --bg2: #f5f5f2;
+      --text: #1a1a18;
+      --text2: #5f5e5a;
+      --text3: #888780;
+      --border: rgba(0,0,0,0.12);
+      --border2: rgba(0,0,0,0.22);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1c1c1a;
+        --bg2: #242422;
+        --text: #e8e6de;
+        --text2: #a0a09a;
+        --text3: #6a6a64;
+        --border: rgba(255,255,255,0.1);
+        --border2: rgba(255,255,255,0.18);
+        --accent-light: #042C53;
+        --accent: #85B7EB;
+        --accent-mid: #378ADD;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.6;
+      padding: 2.5rem 1.25rem;
+    }
+
+    .container { max-width: 740px; margin: 0 auto; }
+
+    .page-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: .25rem;
+    }
+
+    .meta {
+      font-size: 12px;
+      color: var(--text3);
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      margin-bottom: 2rem;
+    }
+
+    .talk-context {
+      font-size: 13px;
+      color: var(--text2);
+      background: var(--bg2);
+      border: 1px dashed var(--border2);
+      border-radius: var(--radius-md);
+      padding: .6rem .9rem;
+      margin-bottom: 2rem;
+      line-height: 1.65;
+    }
+
+    .section { margin-bottom: 2.25rem; }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: .85rem;
+    }
+
+    .pill {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 10px;
+      border-radius: 20px;
+      background: var(--accent-light);
+      color: var(--accent);
+      border: 1px solid var(--accent-mid);
+      opacity: .8;
+      white-space: nowrap;
+    }
+
+    .section-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1rem 1.25rem;
+      margin-bottom: .65rem;
+    }
+
+    .card-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      margin-bottom: .35rem;
+    }
+
+    .card-body {
+      font-size: 14px;
+      color: var(--text);
+      line-height: 1.7;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .65rem;
+    }
+
+    @media (max-width: 540px) {
+      .two-col { grid-template-columns: 1fr; }
+    }
+
+    .quote-block {
+      border-left: 3px solid var(--accent-mid);
+      padding: .6rem 1rem;
+      background: var(--accent-light);
+      border-radius: 0 8px 8px 0;
+      margin: .65rem 0;
+      font-size: 14px;
+      color: var(--text);
+      line-height: 1.65;
+    }
+
+    .callout {
+      background: var(--bg2);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius-md);
+      padding: .75rem 1rem;
+      font-size: 13px;
+      color: var(--text2);
+      margin-top: .5rem;
+      line-height: 1.65;
+    }
+
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 9px;
+      border-radius: 12px;
+      margin-right: 4px;
+      margin-bottom: 5px;
+      border: 1px solid;
+      font-weight: 500;
+    }
+
+    .tag-blue   { background: #E6F1FB; color: #0C447C; border-color: #378ADD; }
+    .tag-amber  { background: #FAEEDA; color: #633806; border-color: #BA7517; }
+    .tag-coral  { background: #FAECE7; color: #712B13; border-color: #993C1D; }
+    .tag-teal   { background: #E1F5EE; color: #085041; border-color: #0F6E56; }
+    .tag-purple { background: #EEEDFE; color: #26215C; border-color: #534AB7; }
+    .tag-red    { background: #FCEBEB; color: #501313; border-color: #A32D2D; }
+
+    @media (prefers-color-scheme: dark) {
+      .tag-blue   { background: #042C53; color: #B5D4F4; border-color: #185FA5; }
+      .tag-amber  { background: #412402; color: #FAC775; border-color: #854F0B; }
+      .tag-coral  { background: #4A1B0C; color: #F5C4B3; border-color: #993C1D; }
+      .tag-teal   { background: #04342C; color: #9FE1CB; border-color: #0F6E56; }
+      .tag-purple { background: #26215C; color: #CECBF6; border-color: #534AB7; }
+      .tag-red    { background: #501313; color: #F7C1C1; border-color: #A32D2D; }
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 2rem 0;
+    }
+
+    .action-item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: .65rem 1rem;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: .5rem;
+      line-height: 1.6;
+    }
+
+    .action-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-mid);
+      margin-top: 5px;
+      flex-shrink: 0;
+    }
+
+    code {
+      font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace;
+      font-size: 12.5px;
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      padding: 1px 5px;
+      color: var(--text);
+    }
+
+    .code-block {
+      font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", monospace;
+      font-size: 12.5px;
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius-md);
+      padding: .85rem 1rem;
+      margin-top: .65rem;
+      line-height: 1.75;
+      color: var(--text2);
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    .code-block .kw  { color: #B548C6; }
+    .code-block .fn  { color: #378ADD; }
+    .code-block .cm  { color: var(--text3); font-style: italic; }
+
+    .swimlane {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: .5rem;
+      margin-top: .65rem;
+    }
+
+    .swimlane-col {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: .65rem .85rem;
+    }
+
+    .swimlane-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      color: var(--text3);
+      margin-bottom: .4rem;
+    }
+
+    .swimlane-body {
+      font-size: 12.5px;
+      color: var(--text);
+      line-height: 1.65;
+    }
+
+    @media (max-width: 540px) {
+      .swimlane { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body id="artifacts-component-root-html">
+<div class="container">
+
+  <h1 class="page-title">GCD, race conditions & privileged daemons</h1>
+  <div class="meta">Talk notes — organized · March 2026</div>
+
+  <div class="talk-context">🎤 Talk context: <em>"GCD powers macOS concurrency. Misused queues and QoS can trigger race conditions, deadlocks, and sandbox escape in privileged services. Using a GSSCred sandbox-escape race, we will map failure modes to code reviews and telemetry for daemon behavioral detections."</em></div>
+
+
+  <!-- Section 1 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="pill">Foundation</span>
+      <span class="section-title">Processes vs. threads — the conceptual correction</span>
+    </div>
+    <div class="card">
+      <div class="card-body">A process is not a running entity — it's a container. It holds one or more threads and provides the virtual memory image, file descriptors, and ports shared by all threads. When someone says a process is "executing," the correct read is: <em>at least one of its threads is executing.</em></div>
+    </div>
+    <div class="quote-block">Race conditions live at the thread level, not the process level. This framing matters for everything that follows.</div>
+  </div>
+
+  <div class="divider"></div>
+
+
+  <!-- Section 2 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="pill">Core concept</span>
+      <span class="section-title">Why races happen: interleavings</span>
+    </div>
+    <div class="card">
+      <div class="card-body">Two threads (T1, T2) each execute: read x → x = x + 1 → write x. Run sequentially, x increments by 2. But if T1 reads, then T2 reads before T1 writes, both see the same initial value and the increment happens only once. The number of possible interleavings grows combinatorially — only some are safe, and you can't test for all of them.</div>
+    </div>
+    <div class="callout">This is the TOCTOU problem (Time of Check to Time of Use) applied to concurrency. The check is honest; the action operates on a different reality.</div>
+  </div>
+
+  <div class="divider"></div>
+
+
+  <!-- Section 3 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="pill">GCD</span>
+      <span class="section-title">Grand Central Dispatch — what it actually is</span>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-label">Serial queues</div>
+        <div class="card-body">Run one task at a time, in order. Safe for shared state — tasks can't interleave. Misuse: calling <code>dispatch_sync</code> back into the same serial queue freezes it.</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Concurrent queues</div>
+        <div class="card-body">Run multiple tasks simultaneously. GCD manages the thread pool. Misuse: flooding with blocking tasks saturates the pool and starves other work.</div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:.65rem">
+      <div class="card-label">QoS levels (priority system)</div>
+      <div class="card-body">
+        <span class="tag tag-purple">User Interactive</span> animations, immediate UI<br>
+        <span class="tag tag-blue">User Initiated</span> seamless UX, e.g. table load<br>
+        <span class="tag tag-teal">Utility</span> long-running, user-aware (downloads)<br>
+        <span class="tag tag-amber">Background</span> invisible work, backups<br>
+        <span class="tag tag-coral">Default</span> between Initiated and Utility<br>
+        <span class="tag" style="background:var(--bg2);color:var(--text3);border-color:var(--border2)">Unspecified</span> lowest priority, missing QoS info
+      </div>
+    </div>
+    <div class="callout">⚠️ GCD does not automatically prevent race conditions. It schedules execution. What happens to shared state is entirely your responsibility.</div>
+  </div>
+
+  <div class="divider"></div>
+
+
+  <!-- Section 4 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="pill">Failure mode 1</span>
+      <span class="section-title">Priority inversion</span>
+    </div>
+    <div class="card">
+      <div class="card-body">A high-priority thread ends up waiting on a low-priority thread that holds a lock. Because the low-priority thread can be preempted by a medium-priority thread, the high-priority work is frozen behind something it technically outranks.</div>
+    </div>
+
+    <div class="swimlane">
+      <div class="swimlane-col">
+        <div class="swimlane-label" style="color:#0F6E56">L (low)</div>
+        <div class="swimlane-body">Acquires lock R → runs critical section → eventually unlocks. But gets preempted by M before it can finish.</div>
+      </div>
+      <div class="swimlane-col">
+        <div class="swimlane-label" style="color:#993C1D">H (high)</div>
+        <div class="swimlane-body">Becomes runnable, needs R, blocks on L. Sits waiting while M (lower than H) runs freely.</div>
+      </div>
+      <div class="swimlane-col">
+        <div class="swimlane-label" style="color:#633806">M (med)</div>
+        <div class="swimlane-body">Preempts L while H is blocked. Runs despite being lower priority than H. This is the inversion.</div>
+      </div>
+    </div>
+
+    <div class="quote-block" style="margin-top:.65rem">Xcode runtime warning: <em>"Thread running at QOS_CLASS_USER_INTERACTIVE waiting on a lower QoS thread running at QOS_CLASS_DEFAULT — investigate ways to avoid priority inversions."</em></div>
+
+    <div class="callout">Darwin's fix: priority inheritance — the kernel temporarily boosts the low-priority thread holding the lock to match whoever's waiting on it, until the lock is released.</div>
+  </div>
+
+  <div class="divider"></div>
+
+
+  <!-- Section 5 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="pill">Failure mode 1 — fix</span>
+      <span class="section-title">The right locking primitives</span>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-label">pthread_mutex_t — blocks/sleeps, scheduler can help</div>
+        <div class="code-block"><span class="kw">static</span> pthread_mutex_t gMutex =
+  PTHREAD_MUTEX_INITIALIZER;
+
+<span class="fn">pthread_mutex_lock</span>(&gMutex);
+<span class="cm">// critical section
+// contended: thread can sleep</span>
+<span class="fn">pthread_mutex_unlock</span>(&gMutex);</div>
+      </div>
+      <div class="card">
+        <div class="card-label">os_unfair_lock — Darwin replacement for spinlock</div>
+        <div class="code-block"><span class="kw">static</span> os_unfair_lock gLock =
+  OS_UNFAIR_LOCK_INIT;
+
+<span class="fn">os_unfair_lock_lock</span>(&gLock);
+<span class="cm">// critical section
+// contended: waiter parks</span>
+<span class="fn">os_unfair_lock_unlock</span>(&gLock);</div>
+      </div>
+    </div>
+    <div class="callout">Avoid: reader-writer locks, semaphores, spinlocks. These cannot participate in QoS inheritance — they are the anti-patterns that allow inversions to persist.</div>
+  </div>
+
+  <div class="divider"></div>
+
+
+  <!-- Section 6 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="pill">Failure mode 2</span>
+      <span class="section-title">dispatch_sync deadlocks — the self-wait scenario</span>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-label">Normal case — works fine</div>
+        <div class="card-body">Caller Queue (main thread) calls <code>dispatch_sync</code> on a <em>different</em> Target Queue (background thread). Caller blocks and waits. Task block runs and completes. Caller is unblocked. Clean.</div>
+      </div>
+      <div class="card">
+        <div class="card-label" style="color:#A32D2D">Deadlock scenario — app freezes</div>
+        <div class="card-body">Caller Queue and Target Queue are the <em>same</em> serial queue. Queue is blocked by the <code>dispatch_sync</code> call. Task cannot start because the queue is blocked. Nothing moves. App freezes.</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:.65rem">
+      <div class="card-label">Circular wait — the full 4-step collapse</div>
+      <div class="card-body">
+        1. Main thread (serial queue) queues tasks to background threads (concurrent queue)<br>
+        2. Background threads block, waiting for the main thread<br>
+        3. Main thread makes a synchronous call, waiting for a worker thread<br>
+        4. Circular wait: main waits for workers, workers wait for main → freeze
+      </div>
+    </div>
+    <div class="callout">Fix: use <code>dispatch_async</code> for cross-queue calls. Restructure code to avoid synchronous callbacks. Never call <code>dispatch_sync</code> from within a queue that could be waiting on itself.</div>
+  </div>
+
+  <div class="divider"></div>
+
+
+  <!-- Section 7 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="pill">Failure mode 3</span>
+      <span class="section-title">Thread pool saturation / resource starvation</span>
+    </div>
+    <div class="card">
+      <div class="card-body"><code>DISPATCH_ASYNC</code> with huge volume or blocking tasks floods the concurrent queue. GCD's worker thread pool saturates. All other tasks are starved of CPU and threads. High thread churn, CPU spikes, throughput collapses. Single-threaded daemons are especially exposed.</div>
+    </div>
+    <div class="quote-block">GCD uses a fixed-size thread pool for concurrent tasks. Saturating it doesn't just slow your tasks — it starves the entire system of workers.</div>
+  </div>
+
+  <div class="divider"></div>
+
+
+  <!-- Section 8 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="pill">Failure mode 4</span>
+      <span class="section-title">Sandbox escape via XPC — the GSSCred exploit (CVE-2018-4331)</span>
+    </div>
+    <div class="card">
+      <div class="card-body"><code>com.apple.GSSCred</code> is a privileged macOS daemon managing Kerberos/GSS credentials. It accepted XPC connections from sandboxed, unprivileged clients while assuming a privileged context. A sandboxed attacker could send rapid-fire XPC messages that raced the daemon's state — exploiting the window between when trust was checked and when the privileged action was taken.</div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-label">The pattern</div>
+        <div class="card-body">Unprivileged client → crosses XPC trust boundary → reaches privileged daemon → races TOCTOU window → code execution in privileged service context.</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Telemetry signal</div>
+        <div class="card-body">Rapid-fire XPC calls from a sandboxed process. Anomalous credential activity. These are the behavioral indicators for daemon-level race exploitation.</div>
+      </div>
+    </div>
+    <div class="quote-block">Queue misconfiguration + privileged XPC service + sandboxed client access = code execution. This is why GCD misuse is a security problem, not just a performance problem.</div>
+  </div>
+
+  <div class="divider"></div>
+
+
+  <!-- Section 9 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="pill">Detection</span>
+      <span class="section-title">Static code review signals</span>
+    </div>
+    <div class="card">
+      <div class="card-label">XPC connection queueing</div>
+      <div class="card-body">Ensure <code>xpc_connection_set_target_queue()</code> is always called for accepted connections. Missing this is a flag.</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Serial vs concurrent assumptions</div>
+      <div class="card-body">Detect improper assumptions about serial execution in concurrent environments. A service that thinks it's serialized but isn't is a race waiting to trigger.</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Synchronous calls</div>
+      <div class="card-body">Flag all <code>dispatch_sync</code> usage and require explicit justification in code review. It is rarely the right choice.</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Shared mutable state without synchronization</div>
+      <div class="card-body">Identify globals accessed without locks or serial queue funnels. Any global touched by more than one queue without protection is a race condition.</div>
+    </div>
+    <div class="callout">Runtime tool: Xcode Thread Performance Checker. Detects priority inversions automatically at runtime. Enable in scheme settings — flag non-UI work running on the main thread too.</div>
+  </div>
+
+  <div class="divider"></div>
+
+
+  <!-- Section 10 -->
+  <div class="section">
+    <div class="section-header">
+      <span class="pill">Conclusion</span>
+      <span class="section-title">The four takeaways from the talk</span>
+    </div>
+    <div class="action-item"><div class="action-dot"></div><div>How GCD works and common concurrency hazards — queues, thread pools, QoS.</div></div>
+    <div class="action-item"><div class="action-dot"></div><div>Priority inversion and deadlock pitfalls with synchronous queue usage — and the right primitives to use instead.</div></div>
+    <div class="action-item"><div class="action-dot"></div><div>The GSSCred exploit: how queue misconfiguration in a privileged XPC service leads to sandbox escape and code execution.</div></div>
+    <div class="action-item"><div class="action-dot"></div><div>Detection: four static code review signals, Xcode Thread Performance Checker, and telemetry patterns for behavioral daemon detections.</div></div>
+  </div>
+
+</div>
+</body>
+</html>
