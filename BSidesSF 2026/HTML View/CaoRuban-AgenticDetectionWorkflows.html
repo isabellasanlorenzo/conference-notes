@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Detection Duet — Agentic Threat Detection Pipelines</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,600;0,700;1,300;1,600&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #ffffff;
+  --bg2: #f5f4f0;
+  --bg3: #eceae3;
+  --border: #d8d4c8;
+  --border-dark: #a8a298;
+  --accent: #1a5c8a;
+  --accent2: #c0392b;
+  --accent3: #2d7a3a;
+  --accent4: #7b4fa6;
+  --text: #1e1c18;
+  --text-mid: #4a4640;
+  --text-dim: #8a8278;
+  --mono: 'DM Mono', monospace;
+  --display: 'Fraunces', serif;
+  --body: 'DM Sans', sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body { background:var(--bg); color:var(--text); font-family:var(--body); font-size:15px; line-height:1.75; }
+.wrapper { max-width:900px; margin:0 auto; padding:0 40px 100px; }
+
+/* HERO */
+.hero { padding:72px 0 52px; border-bottom:2px solid var(--text); margin-bottom:52px; }
+.eyebrow { font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:0.2em; text-transform:uppercase; color:var(--accent); margin-bottom:16px; }
+.hero h1 { font-family:var(--display); font-size:clamp(48px,8vw,84px); font-weight:700; line-height:0.95; color:var(--text); margin-bottom:10px; letter-spacing:-0.02em; }
+.hero h1 em { font-style:italic; font-weight:300; color:var(--accent); }
+.source-note { font-family:var(--mono); font-size:11px; color:var(--text-dim); margin-bottom:24px; }
+.lede { font-family:var(--display); font-size:17px; font-style:italic; font-weight:300; color:var(--text-mid); max-width:600px; line-height:1.55; border-left:3px solid var(--accent2); padding-left:16px; }
+
+/* STATS */
+.stat-row { display:grid; grid-template-columns:repeat(3,1fr); border:2px solid var(--text); margin-bottom:60px; }
+.stat { padding:26px 18px; text-align:center; border-right:1px solid var(--border-dark); }
+.stat:last-child { border-right:none; }
+.stat .num { font-family:var(--display); font-size:52px; font-weight:700; color:var(--accent3); line-height:1; display:block; margin-bottom:5px; }
+.stat .lbl { font-family:var(--mono); font-size:10px; letter-spacing:0.12em; color:var(--text-dim); text-transform:uppercase; }
+
+/* SECTIONS */
+.section { margin-bottom:64px; }
+.section-header { display:flex; align-items:baseline; gap:14px; margin-bottom:22px; padding-bottom:10px; border-bottom:1px solid var(--border-dark); }
+.section-num { font-family:var(--mono); font-size:11px; font-weight:500; color:var(--accent2); letter-spacing:0.1em; flex-shrink:0; }
+.section h2 { font-family:var(--display); font-size:28px; font-weight:600; color:var(--text); letter-spacing:-0.01em; }
+.section p { margin-bottom:14px; font-weight:300; color:var(--text); max-width:740px; }
+
+/* PROBLEM BOX */
+.problem-box { background:#fdf5f4; border:1px solid #e0c0bc; border-left:4px solid var(--accent2); padding:22px 26px; margin:22px 0; }
+.pb-label { font-family:var(--mono); font-size:10px; letter-spacing:0.18em; color:var(--accent2); text-transform:uppercase; font-weight:500; margin-bottom:12px; }
+.problem-box ul { list-style:none; }
+.problem-box li { font-size:14px; font-weight:300; display:flex; gap:12px; padding:6px 0; border-bottom:1px solid #f0ddd8; }
+.problem-box li:last-child { border-bottom:none; }
+.problem-box li::before { content:'✗'; color:var(--accent2); font-weight:500; flex-shrink:0; }
+
+/* STACK DIAGRAM */
+.stack-diagram { background:var(--bg2); border:1px solid var(--border); padding:28px 24px; margin:22px 0; overflow-x:auto; }
+.diag-label { font-family:var(--mono); font-size:10px; letter-spacing:0.15em; text-transform:uppercase; color:var(--text-dim); margin-bottom:20px; }
+.arch-row { display:flex; align-items:flex-start; gap:0; min-width:580px; }
+.arch-stage { display:flex; flex-direction:column; align-items:center; gap:6px; }
+.arch-stage-lbl { font-family:var(--mono); font-size:9px; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-dim); text-align:center; margin-top:8px; line-height:1.4; }
+.arch-node { background:white; border:1.5px solid var(--border-dark); padding:9px 12px; font-family:var(--mono); font-size:11px; font-weight:500; color:var(--text); text-align:center; min-width:108px; }
+.arch-node.blue { border-color:var(--accent); color:var(--accent); background:#f0f6fb; }
+.arch-node.green { border-color:var(--accent3); color:var(--accent3); background:#f0f7f0; }
+.arch-node.purple { border-color:var(--accent4); color:var(--accent4); background:#f5f0fb; }
+.arch-arrow { flex:0 0 28px; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-size:18px; padding-top:12px; }
+
+/* PIPELINE */
+.pipeline { display:flex; flex-direction:column; gap:2px; margin:26px 0; }
+.pipeline-step { display:grid; grid-template-columns:96px 1fr; background:white; border:1px solid var(--border); transition:border-color 0.2s; }
+.pipeline-step:hover { border-color:var(--accent); }
+.step-num-col { background:var(--bg2); border-right:1px solid var(--border); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:14px 10px; gap:4px; }
+.step-num-col .n { font-family:var(--display); font-size:36px; font-weight:700; color:var(--accent); line-height:1; }
+.step-num-col .badge { font-family:var(--mono); font-size:8px; letter-spacing:0.12em; color:var(--text-dim); text-transform:uppercase; text-align:center; }
+.step-body { padding:16px 20px; }
+.step-title { font-family:var(--mono); font-size:12px; font-weight:500; color:var(--text); margin-bottom:6px; }
+.step-desc { font-size:13px; font-weight:300; color:var(--text-mid); line-height:1.6; }
+.step-desc code { font-family:var(--mono); font-size:11px; color:var(--accent3); background:#edf7ee; padding:1px 5px; }
+.arrow-down { width:1px; height:12px; background:var(--border-dark); margin:0 auto; }
+
+/* TOOL TAGS */
+.tool { display:inline-block; font-family:var(--mono); font-size:10px; padding:1px 6px; margin:0 2px; font-weight:500; }
+.t-blue { background:#e8f1f8; color:var(--accent); border:1px solid #b8d4ec; }
+.t-green { background:#edf7ee; color:var(--accent3); border:1px solid #b8e0bc; }
+.t-purple { background:#f4eefb; color:var(--accent4); border:1px solid #d8c4f0; }
+.t-gray { background:var(--bg2); color:var(--text-mid); border:1px solid var(--border); }
+
+/* CODE BLOCK */
+.code-block { background:#f7f6f2; border:1px solid var(--border); border-top:3px solid var(--accent); margin:20px 0; }
+.cb-header { background:var(--bg3); padding:7px 14px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); }
+.cb-label { font-family:var(--mono); font-size:10px; letter-spacing:0.14em; color:var(--accent); text-transform:uppercase; font-weight:500; }
+.cb-lang { font-family:var(--mono); font-size:10px; color:var(--text-dim); }
+.code-block pre { padding:18px 22px; font-family:var(--mono); font-size:12px; line-height:1.75; color:var(--text); overflow-x:auto; white-space:pre; }
+.kw { color:#7b2d8b; font-weight:500; }
+.fn { color:#1a6b2a; font-weight:500; }
+.str { color:#b05a00; }
+.cm { color:var(--text-dim); font-style:italic; }
+.vr { color:var(--accent); }
+
+/* CALLOUT */
+.callout { background:#f0f6fb; border:1px solid #b8d4ec; border-left:4px solid var(--accent); padding:16px 20px; margin:20px 0; display:flex; gap:12px; }
+.callout .icon { font-size:15px; flex-shrink:0; margin-top:2px; }
+.callout p { font-family:var(--mono); font-size:12px; color:var(--text); line-height:1.6; margin:0; }
+.callout p strong { color:var(--accent); }
+
+/* TABLE */
+.tbl { width:100%; border-collapse:collapse; margin:20px 0; font-size:13px; }
+.tbl th { font-family:var(--mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:white; background:var(--text); padding:10px 14px; text-align:left; }
+.tbl td { padding:11px 14px; border-bottom:1px solid var(--border); color:var(--text); font-weight:300; vertical-align:top; }
+.tbl tr:nth-child(even) td { background:var(--bg2); }
+.td-lbl { font-family:var(--mono); font-size:12px; font-weight:500; color:var(--text); }
+
+/* IDEA GRID */
+.idea-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:20px 0; }
+.idea-card { background:white; border:1px solid var(--border); padding:16px; }
+.idea-card h4 { font-family:var(--mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; font-weight:500; color:var(--text-dim); margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+.idea-card li { font-size:13px; font-weight:300; color:var(--text); list-style:none; padding:4px 0; display:flex; align-items:center; gap:8px; }
+.dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+
+/* VAL GRID */
+.val-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:20px 0; }
+.val-card { background:white; border:1px solid var(--border); padding:18px; }
+.val-card h4 { font-family:var(--mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; font-weight:500; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+.val-card.agent h4 { color:var(--accent); }
+.val-card.human h4 { color:var(--accent2); }
+.val-card ul { list-style:none; display:flex; flex-direction:column; gap:7px; }
+.val-card li { font-size:13px; font-weight:300; color:var(--text); display:flex; gap:8px; }
+.val-card.agent li::before { content:'→'; color:var(--accent); font-weight:500; flex-shrink:0; }
+.val-card.human li::before { content:'→'; color:var(--accent2); font-weight:500; flex-shrink:0; }
+
+/* SYNC/ASYNC BADGES */
+.bs { display:inline-block; font-family:var(--mono); font-size:9px; letter-spacing:0.1em; padding:2px 6px; text-transform:uppercase; font-weight:500; margin-right:4px; }
+.bs-blue { background:#e8f1f8; color:var(--accent); border:1px solid #b8d4ec; }
+.bs-green { background:#edf7ee; color:var(--accent3); border:1px solid #b8e0bc; }
+
+/* HIGHLIGHTS */
+.hl { color:var(--accent3); font-weight:500; }
+.hl-r { color:var(--accent2); font-weight:500; }
+.hl-b { color:var(--accent); font-weight:500; }
+.hl-p { color:var(--accent4); font-weight:500; }
+
+/* FOOTER */
+.doc-footer { margin-top:80px; padding-top:26px; border-top:2px solid var(--text); display:flex; justify-content:space-between; flex-wrap:wrap; gap:16px; }
+.doc-footer .meta { font-family:var(--mono); font-size:10px; color:var(--text-dim); letter-spacing:0.08em; line-height:1.8; }
+.doc-footer .meta strong { color:var(--accent); }
+
+@media(max-width:640px){
+  .wrapper{padding:0 20px 60px;}
+  .stat-row,.val-grid,.idea-grid{grid-template-columns:1fr;}
+  .pipeline-step{grid-template-columns:72px 1fr;}
+  .hero h1{font-size:44px;}
+}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+<div class="hero">
+  <div class="eyebrow">Conference Notes — Detection Engineering Talk · Verkada Security</div>
+  <h1>Detection <em>Duet</em></h1>
+  <div class="source-note">Source: Live talk slides · AWS architecture · Built in-house by Verkada</div>
+  <p class="lede">"Developing threat detections is slow, repetitive work. Learn how we cut threat detection development and maintenance time by over 80%."</p>
+</div>
+
+<div class="stat-row">
+  <div class="stat"><span class="num">80%</span><span class="lbl">Reduction in dev + maintenance time</span></div>
+  <div class="stat"><span class="num">2</span><span class="lbl">Agents: Creation + Maintenance</span></div>
+  <div class="stat"><span class="num">∞</span><span class="lbl">Human review still required</span></div>
+</div>
+
+<!-- 01 PROBLEM -->
+<div class="section">
+  <div class="section-header"><span class="section-num">01 //</span><h2>The Problem</h2></div>
+  <p>Threat detection engineering is structurally slow — not because analysts lack skill, but because every single rule requires holding three things in your head at once: the adversary behavior, the log schema, and the detection platform syntax. Then you validate it, ship it, and maintain it when schemas change. Multiply this by hundreds of rules and one analyst cannot keep up.</p>
+  <div class="problem-box">
+    <div class="pb-label">Why detection work is slow by design</div>
+    <ul>
+      <li>Context-heavy — requires simultaneous knowledge of the threat, log schema, and SIEM syntax</li>
+      <li>Repetitive — similar rule patterns rewritten from scratch every time, no reuse</li>
+      <li>Fragile — log source schema changes silently break existing rules</li>
+      <li>Unscalable — one analyst writing rules manually cannot pace a growing attack surface</li>
+      <li>Tribal knowledge — detection intent rarely lives in the rule itself, it lives in people</li>
+    </ul>
+  </div>
+  <p>Verkada's answer: two agents. One for <span class="hl-b">creating new detections</span> from unstructured ideas. One for <span class="hl-r">maintaining existing rules</span> when log sources drift. Together — the Detection Duet.</p>
+</div>
+
+<!-- 02 BUILT IN HOUSE STACK -->
+<div class="section">
+  <div class="section-header"><span class="section-num">02 //</span><h2>The Built-In-House Stack</h2></div>
+  <p>Before understanding the agentic creation workflow, it helps to see the full security data platform these detections run on. Verkada built the entire pipeline themselves — from log collection through SOAR response.</p>
+  <div class="stack-diagram">
+    <div class="diag-label">Slide 1 — full pipeline as shown</div>
+    <div class="arch-row">
+      <div class="arch-stage">
+        <div class="arch-node blue">Log Pull<br><span style="font-size:9px;font-weight:300;color:var(--text-dim)">Grove</span></div>
+        <div class="arch-node" style="margin-top:6px">Log Push</div>
+        <div class="arch-stage-lbl">Log Gathering</div>
+      </div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-stage">
+        <div class="arch-node">Log Normalization</div>
+        <div class="arch-node" style="margin-top:6px">Log Enrichment</div>
+        <div class="arch-stage-lbl">Preprocessing<br><strong>Substation</strong></div>
+      </div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-stage">
+        <div class="arch-node green">Streaming Analysis</div>
+        <div class="arch-node" style="margin-top:6px">Batch Analysis</div>
+        <div class="arch-stage-lbl">Analysis<br><strong>StreamAlert</strong></div>
+      </div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-stage">
+        <div class="arch-node">Slack</div>
+        <div class="arch-node" style="margin-top:6px">Opsgenie</div>
+        <div class="arch-node" style="margin-top:6px">Linear</div>
+        <div class="arch-stage-lbl">Alerting</div>
+      </div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-stage">
+        <div class="arch-node purple">Alerts Enrichment</div>
+        <div class="arch-node" style="margin-top:6px">Tracecat</div>
+        <div class="arch-node" style="margin-top:6px">AI Response</div>
+        <div class="arch-stage-lbl">SOAR</div>
+      </div>
+    </div>
+  </div>
+  <p><span class="hl-b">Grove</span> handles log pull. <span class="hl-b">Substation</span> normalizes and enriches. <span class="hl">StreamAlert</span> is the detection engine (streaming and batch). <span class="hl-p">Linear</span> appears in both alerting and as a trigger in the creation workflow. <span class="hl-p">Tracecat</span> handles SOAR orchestration.</p>
+</div>
+
+<!-- 03 IDEA GENERATION -->
+<div class="section">
+  <div class="section-header"><span class="section-num">03 //</span><h2>Idea Generation — Where It All Starts</h2></div>
+  <p>Slide 3 shows that detection ideas come from three distinct channels, each feeding a common Idea node that hands off to the creation pipeline. The AI Research channel is the differentiator — it lets the system proactively identify coverage gaps rather than only reacting to external research.</p>
+  <div class="idea-grid">
+    <div class="idea-card">
+      <h4>Existing Research</h4>
+      <ul>
+        <li><span class="dot" style="background:var(--accent)"></span>Blog posts</li>
+        <li><span class="dot" style="background:var(--accent)"></span>GitHub repositories</li>
+        <li><span class="dot" style="background:var(--accent)"></span>Public research papers</li>
+      </ul>
+    </div>
+    <div class="idea-card">
+      <h4>Verkada's Research</h4>
+      <ul>
+        <li><span class="dot" style="background:var(--accent2)"></span>Internal security reviews</li>
+        <li><span class="dot" style="background:var(--accent2)"></span>Threat research findings</li>
+      </ul>
+    </div>
+    <div class="idea-card">
+      <h4>AI Research</h4>
+      <ul>
+        <li><span class="dot" style="background:var(--accent3)"></span>Risk Registry</li>
+        <li><span class="dot" style="background:var(--accent3)"></span>Log Inventory</li>
+        <li><span class="dot" style="background:var(--accent3)"></span>MITRE ATT&CK detection strategies</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout">
+    <span class="icon">💡</span>
+    <p><strong>Why the AI Research channel matters:</strong> By feeding the Risk Registry, Log Inventory, and MITRE ATT&CK strategies into an agent, Verkada can generate detection ideas proactively — not just react to external research. The agent identifies what behaviors you should be detecting that you currently aren't.</p>
+  </div>
+</div>
+
+<!-- 04 CREATION PIPELINE -->
+<div class="section">
+  <div class="section-header"><span class="section-num">04 //</span><h2>The Creation Workflow — Full Pipeline</h2></div>
+  <p>This is the core of the talk — slide 2. An unstructured idea enters. A pull request against the detection repository exits the other end. Every step in between is agentic except for the final human review gate.</p>
+
+  <div class="pipeline">
+    <div class="pipeline-step">
+      <div class="step-num-col"><span class="n">01</span><span class="badge">Input</span></div>
+      <div class="step-body">
+        <div class="step-title">Idea Arrives (Unstructured)</div>
+        <div class="step-desc">An unstructured idea enters the pipeline from any of the three idea sources. At this point it may be nothing more than a sentence: "we should detect root console logins from anonymizing infrastructure." No code, no schema, no ATT&CK mapping — just intent.</div>
+      </div>
+    </div>
+    <div class="arrow-down"></div>
+    <div class="pipeline-step">
+      <div class="step-num-col"><span class="n">02</span><span class="badge">Context</span></div>
+      <div class="step-body">
+        <div class="step-title">Context Gathering — Bedrock + DataCatalog + S3 + Notion</div>
+        <div class="step-desc">
+          Three inputs are gathered in parallel and processed by <span class="tool t-blue">Amazon Bedrock</span> to produce structured metadata:<br><br>
+          <span class="tool t-gray">Notion</span> provides a <strong>Log Source Overview</strong> — human-written docs about which log sources exist.<br><br>
+          <span class="tool t-blue">DataCatalog</span> provides the <strong>Log Schema</strong> — actual field names, types, and formats.<br><br>
+          <span class="tool t-gray">S3</span> provides <strong>Log Samples</strong> — real example events for grounding the generation.<br><br>
+          Bedrock combines all three into a structured metadata object the rest of the pipeline uses.
+        </div>
+      </div>
+    </div>
+    <div class="arrow-down"></div>
+    <div class="pipeline-step">
+      <div class="step-num-col"><span class="n">03</span><span class="badge">Map</span></div>
+      <div class="step-body">
+        <div class="step-title">Create MITRE ATT&CK Mapping</div>
+        <div class="step-desc">Using the enriched metadata, the agent maps the detection idea to the correct ATT&CK technique(s). Output: confirmed <code>technique_id</code>, tactic, and sub-technique. This anchors the detection in a standard framework and determines which code examples get pulled in the next step.</div>
+      </div>
+    </div>
+    <div class="arrow-down"></div>
+    <div class="pipeline-step">
+      <div class="step-num-col"><span class="n">04</span><span class="badge">Route</span></div>
+      <div class="step-body">
+        <div class="step-title">Decide Type — Streaming or Scheduled</div>
+        <div class="step-desc">
+          A decision node routes to one of two branches based on the nature of the threat behavior:<br><br>
+          <span class="tool t-blue">Streaming Detection</span> — real-time, event-driven (e.g., single login from TOR exit node). Runs against live log streams in StreamAlert.<br><br>
+          <span class="tool t-green">Scheduled Detection</span> — aggregate or time-window behavior (e.g., 10 failed logins in 5 minutes). Runs as a batch query on a schedule.<br><br>
+          Each branch pulls its own type-matched <strong>Code Examples</strong> from the repo and builds an appropriate <strong>Prompt</strong> before passing to the Lambda.
+        </div>
+      </div>
+    </div>
+    <div class="arrow-down"></div>
+    <div class="pipeline-step">
+      <div class="step-num-col"><span class="n">05</span><span class="badge">Generate</span></div>
+      <div class="step-body">
+        <div class="step-title">Code Generation Lambda — The Terminal Execution Step</div>
+        <div class="step-desc">
+          Both branches converge here. The Lambda wakes up with no memory of prior runs — everything it needs arrived in the event payload. It calls an LLM with the fully-assembled prompt (intent + schema + ATT&CK mapping + code examples) and generates detection rule code.<br><br>
+          The Coding Agent inside this Lambda has two tools available:<br><br>
+          <span class="tool t-blue">Our Repository</span> — read/write access to the detection rule codebase.<br>
+          <span class="tool t-purple">Athena Skill</span> — run SQL queries against real log data in Amazon Athena to validate the rule logic before the PR is opened.<br><br>
+          The few-shot code examples force style conformance — the generated rule will match your team's naming conventions, severity constants, return format, and metadata structure.
+        </div>
+      </div>
+    </div>
+    <div class="arrow-down"></div>
+    <div class="pipeline-step">
+      <div class="step-num-col"><span class="n">06</span><span class="badge">Review</span></div>
+      <div class="step-body">
+        <div class="step-title">Open PR — Mandatory Human Gate</div>
+        <div class="step-desc">The Lambda's final output is a pull request opened against the detection repository. No rule is deployed until a human approves the PR. The analyst reviews: does the logic match the intent? Is the scope correct? Does it hold up against real log data? <span class="hl-r">The agent proposes. The analyst disposes.</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 05 PROMPT ENGINEERING -->
+<div class="section">
+  <div class="section-header"><span class="section-num">05 //</span><h2>Prompt Engineering with Internal Context</h2></div>
+  <p>The quality of generated code is entirely determined by prompt quality. Generic prompts produce generic rules. The power here is <span class="hl-b">internal context injection</span> — schema, log samples, and existing rules that no LLM could have from training data alone.</p>
+
+  <div class="code-block">
+    <div class="cb-header"><span class="cb-label">4-Layer Prompt Structure</span><span class="cb-lang">Prompt Template</span></div>
+    <pre><span class="cm">## Layer 1 — Role + Detection Type</span>
+<span class="kw">You are</span> a detection engineer. Generate a <span class="vr">{detection_type}</span>
+detection rule for StreamAlert using the schema and examples below.
+
+<span class="cm">## Layer 2 — Threat Context (from Bedrock enrichment)</span>
+Technique:  <span class="vr">{technique_id}</span> — <span class="vr">{technique_name}</span>
+Tactic:     <span class="vr">{tactic}</span>
+Behavior:   <span class="vr">{condition_description}</span>
+Log source: <span class="vr">{log_source}</span>
+
+<span class="cm">## Layer 3 — Schema + Log Sample (from DataCatalog + S3)</span>
+Available fields:
+  eventName          (string)  e.g. ConsoleLogin
+  userIdentity.type  (string)  Root | IAMUser | AssumedRole
+  sourceIPAddress    (string)  Caller IP
+  <span class="vr">{...all fields from DataCatalog}</span>
+
+Sample log event (real, from S3):
+  <span class="vr">{real_log_sample}</span>
+
+<span class="cm">## Layer 4 — Code Examples (type-matched, from repository)</span>
+<span class="cm"># Match the style, structure, field naming, and return format exactly.</span>
+<span class="vr">{example_rule_1}</span>
+<span class="vr">{example_rule_2}</span>
+
+<span class="cm">## Instruction</span>
+Generate a detection rule for: <span class="vr">{condition_description}</span>
+Return ONLY the rule function. No explanation. No markdown.</pre>
+  </div>
+
+  <div class="callout">
+    <span class="icon">⚠</span>
+    <p><strong>Layer 4 is what forces style conformance.</strong> Without the few-shot examples, the LLM invents its own structure that won't match your SIEM's expected schema. With them, the generated rule looks like it was written by a senior engineer on your team — same field names, same severity constants, same return format.</p>
+  </div>
+</div>
+
+<!-- 06 SYNC VS ASYNC -->
+<div class="section">
+  <div class="section-header"><span class="section-num">06 //</span><h2>Sync vs. Async Invocation</h2></div>
+  <p>The Lambda can run in two modes depending on urgency. Both modes produce the same output (a PR) — they differ in whether the caller waits or submits to a queue.</p>
+  <table class="tbl">
+    <thead><tr><th>Dimension</th><th>Synchronous</th><th>Asynchronous</th></tr></thead>
+    <tbody>
+      <tr><td class="td-lbl">Trigger</td><td><span class="bs bs-blue">SYNC</span> Direct API call, analyst tool</td><td><span class="bs bs-green">ASYNC</span> Linear ticket, SQS queue, EventBridge schedule</td></tr>
+      <tr><td class="td-lbl">Caller behavior</td><td>Waits. Lambda returns result directly.</td><td>Fires and forgets. Lambda notifies via SNS/Slack when done.</td></tr>
+      <tr><td class="td-lbl">Best for</td><td>On-demand interactive rule drafts, analyst experimenting in real time</td><td>Batch backlog, overnight maintenance runs, Linear ticket queue</td></tr>
+      <tr><td class="td-lbl">Linear ticket role</td><td>Not the primary trigger in sync mode</td><td>Ticket creation fires webhook → API Gateway → Lambda. Lambda comments back with generated rule + PR link.</td></tr>
+      <tr><td class="td-lbl">Risk</td><td>LLM calls can hit 30s+ — API Gateway timeout boundary</td><td>Context can go stale if threat intel shifts while rule sits in queue</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 07 VALIDATION -->
+<div class="section">
+  <div class="section-header"><span class="section-num">07 //</span><h2>Validation — Agent + Human Split</h2></div>
+  <p>The Coding Agent doesn't just write code and stop. It runs automated validation using the <span class="hl-p">Athena Skill</span> — querying real log data to test the rule before the PR opens. But automated validation has hard limits. Manual review covers what the agent structurally cannot verify.</p>
+  <div class="val-grid">
+    <div class="val-card agent">
+      <h4>Agent Validates — Automated</h4>
+      <ul>
+        <li>Syntax correctness — does the code parse without errors?</li>
+        <li>Schema compliance — do all referenced fields exist in DataCatalog?</li>
+        <li>Athena test against known true positive log events</li>
+        <li>False positive check against baseline benign event samples</li>
+        <li>ATT&CK technique ID is valid and resolves correctly</li>
+        <li>Severity and metadata conform to repository standards</li>
+      </ul>
+    </div>
+    <div class="val-card human">
+      <h4>Human Validates — Always Required</h4>
+      <ul>
+        <li>Does the logic reflect the actual intended threat behavior?</li>
+        <li>Is the detection scope too broad or too narrow?</li>
+        <li>Are there edge cases in the condition logic the agent missed?</li>
+        <li>Is the alert title useful to a responder at 2am?</li>
+        <li>Does this duplicate an existing rule?</li>
+        <li>Does the severity match operational risk tolerance?</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout">
+    <span class="icon">🔒</span>
+    <p><strong>The trust boundary:</strong> The Code Generation Lambda is where agent reasoning becomes executable artifact. Everything after that Lambda is in the human domain until the PR is approved. No merge = no deploy. The agent proposes. The analyst disposes. This is not a convenience — it is the architecture.</p>
+  </div>
+</div>
+
+<!-- 08 SUMMARY TABLE -->
+<div class="section">
+  <div class="section-header"><span class="section-num">08 //</span><h2>Full Pipeline Reference</h2></div>
+  <table class="tbl">
+    <thead><tr><th>Stage</th><th>Tool / Service</th><th>What It Does</th></tr></thead>
+    <tbody>
+      <tr><td class="td-lbl">Idea Source</td><td>Blog posts, GitHub, Notion, Risk Registry, MITRE ATT&CK</td><td>Generates unstructured detection intent</td></tr>
+      <tr><td class="td-lbl">Context Gathering</td><td>Amazon Bedrock, DataCatalog, S3, Notion</td><td>Produces structured metadata: schema, log samples, log source overview</td></tr>
+      <tr><td class="td-lbl">ATT&CK Mapping</td><td>Amazon Bedrock + MITRE ATT&CK</td><td>Maps intent to confirmed technique ID, tactic, sub-technique</td></tr>
+      <tr><td class="td-lbl">Type Decision</td><td>Agent decision node</td><td>Routes to streaming or scheduled branch with type-matched code examples</td></tr>
+      <tr><td class="td-lbl">Prompt Assembly</td><td>Code Examples (repo) + enriched metadata</td><td>Builds the 4-layer prompt: role, threat context, schema, few-shot examples</td></tr>
+      <tr><td class="td-lbl">Code Generation Lambda</td><td>AWS Lambda + Bedrock LLM + Coding Agent</td><td>Generates detection rule code from assembled prompt</td></tr>
+      <tr><td class="td-lbl">Validation</td><td>Athena Skill</td><td>Tests rule against real log data; checks true/false positive behavior</td></tr>
+      <tr><td class="td-lbl">Human Review</td><td>GitHub PR → analyst approval</td><td>Mandatory gate — no rule deploys without human sign-off</td></tr>
+      <tr><td class="td-lbl">Deployment</td><td>Repository merge → StreamAlert</td><td>Rule goes live in streaming or batch analysis pipeline</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="doc-footer">
+  <div class="meta">DETECTION DUET — CONFERENCE NOTES<br>Compiled by <strong>Threatcraft</strong> · THOR Collective<br>Based on live talk slides, Verkada Security Engineering</div>
+  <div class="meta" style="text-align:right">Stack: Grove · Substation · StreamAlert · Tracecat<br>AWS Bedrock · Lambda · Athena · S3 · DataCatalog<br>Linear · GitHub · MITRE ATT&CK</div>
+</div>
+
+</div>
+</body>
+</html>
