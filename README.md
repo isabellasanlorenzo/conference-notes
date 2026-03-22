@@ -39,7 +39,7 @@ Example:
 ```
 2025-rsaconference/
 ├── README.md
-├── keynote-anna-foundational-security.md
+├── keynote-on-security.md
 └── panel-threat-intel-sharing.md
 ```
 
@@ -109,7 +109,8 @@ The notes here are mine. They're opinionated, incomplete, and filtered through m
 
 | Year | Conference | Talks |
 |------|------------|-------|
-| 2026 | BSides SF | Anna Westelius Keynote |
+| 2026 | BSides SF | Anna Westelius — Keynote |
+| 2026 | BSides SF | Olivia Gallucci — MacOS Race Conditions |
 
 ---
 
