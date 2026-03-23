@@ -1,8 +1,8 @@
 # Detection Duet
 ### Agentic Threat Detection Pipelines
 
-> **Conference Notes — Detection Engineering Talk · Verkada Security**
-> *Source: Live talk slides · AWS architecture · Built in-house by Verkada*
+> **Conference Notes — Detection Engineering Talk · Company Security**
+> *Source: Live talk slides · AWS architecture · Built in-house by Company*
 
 > *"Developing threat detections is slow, repetitive work. Learn how we cut threat detection development and maintenance time by over 80%."*
 
@@ -28,13 +28,13 @@ Threat detection engineering is structurally slow — not because analysts lack 
 - ✗ Unscalable — one analyst writing rules manually cannot pace a growing attack surface
 - ✗ Tribal knowledge — detection intent rarely lives in the rule itself, it lives in people
 
-Verkada's answer: two agents. One for **creating new detections** from unstructured ideas. One for **maintaining existing rules** when log sources drift. Together — the Detection Duet.
+Company's answer: two agents. One for **creating new detections** from unstructured ideas. One for **maintaining existing rules** when log sources drift. Together — the Detection Duet.
 
 ---
 
 ## 02 // The Built-In-House Stack
 
-Before understanding the agentic creation workflow, it helps to see the full security data platform these detections run on. Verkada built the entire pipeline themselves — from log collection through SOAR response.
+Before understanding the agentic creation workflow, it helps to see the full security data platform these detections run on. Company built the entire pipeline themselves — from log collection through SOAR response.
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌──────────────────┐     ┌─────────────┐     ┌──────────────────┐
@@ -62,10 +62,10 @@ Detection ideas come from three distinct channels, each feeding a common **Idea*
 | Source | Inputs |
 |--------|--------|
 | **Existing Research** | Blog posts, GitHub repositories, Public research papers |
-| **Verkada's Research** | Internal security reviews, Threat research findings |
+| **Company's Research** | Internal security reviews, Threat research findings |
 | **AI Research** | Risk Registry, Log Inventory, MITRE ATT&CK detection strategies |
 
-> 💡 **Why the AI Research channel matters:** By feeding the Risk Registry, Log Inventory, and MITRE ATT&CK strategies into an agent, Verkada can generate detection ideas proactively — not just react to external research. The agent identifies what behaviors you should be detecting that you currently aren't.
+> 💡 **Why the AI Research channel matters:** By feeding the Risk Registry, Log Inventory, and MITRE ATT&CK strategies into an agent, Company can generate detection ideas proactively — not just react to external research. The agent identifies what behaviors you should be detecting that you currently aren't.
 
 ---
 
@@ -235,6 +235,6 @@ The Coding Agent doesn't just write code and stop. It runs automated validation 
 
 *Detection Duet — Conference Notes*
 *Compiled by **Threatcraft** *
-*Based on live talk slides, Verkada Security Engineering*
+*Based on live talk slides, Company Security Engineering*
 
 *Stack: Grove · Substation · StreamAlert · Tracecat · AWS Bedrock · Lambda · Athena · S3 · DataCatalog · Linear · GitHub · MITRE ATT&CK*
