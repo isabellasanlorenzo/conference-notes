@@ -1,0 +1,104 @@
+# Hunting Shadow AI with the Agentic Threat Hunting Framework (ATHF)
+
+## The Problem
+
+Most threat hunts start from zero. Notes scatter across Jira tickets, Slack threads, and Google Docs. Analysts forget what was hunted last quarter. Teams fall back to keyword matching and hope. When AI gets involved, it's copy-pasted into ChatGPT with no awareness of the environment — no history, no context, no continuity.
+
+The result: duplicated effort, lost institutional knowledge, and hunts that don't compound.
+
+---
+
+## The Finding That Started It
+
+Using ATHF in customer environments, unauthorized AI agents were discovered in **38% of organizations** — deployments security teams had no visibility into. This is Shadow AI: AI tools adopted outside of IT governance, often with autonomous execution, external API key usage, and persistent memory stores. It's Shadow IT with superpowers.
+
+> Reference: [What is Shadow AI? — Palo Alto Networks](https://www.paloaltonetworks.com/cyberpedia/what-is-shadow-ai)
+
+The challenge: defenders can't easily distinguish user-initiated activity from agent-initiated activity — which makes these tools uniquely difficult to detect and scope.
+
+---
+
+## Why Hunting Agents Is Different
+
+AI agents introduce a novel threat surface. Beyond the tools themselves, the relevant behaviors map to classic TTPs:
+
+- **Network** — outbound connections to external APIs
+- **Persistence** — agents that survive reboots or reinitialize themselves
+- **Credential access** — API keys stored in plaintext or accessible memory
+- **Lateral movement** — agents traversing systems or data stores autonomously
+
+The instinct is to hunt for tool names. That instinct is wrong. **Hunt TTPs, not tool names.** The question isn't *"is this tool installed?"* — it's *"what behaviors is it exhibiting?"*
+
+> Reference: [The Lethal Trifecta — Simon Willison](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/)
+
+---
+
+## How the Hunt Evolves: Investigation → Threat Hunt
+
+Many Shadow AI discoveries begin as investigations — a scoped anomaly, an alert, a suspicious behavior. When the scope outgrows the investigation, it becomes a hunt. ATHF supports this transition by letting you carry all context forward. The hypothesis restates, the scope expands, and nothing is lost.
+
+**Observe phase reframing:** "Are these tools installed?" becomes "What behaviors are they exhibiting?" Keyword matching is a starting point, not a conclusion — you still need to dig.
+
+---
+
+## What ATHF Is
+
+The **Agentic Threat Hunting Framework (ATHF)** is an open-source CLI tool and markdown framework that gives every threat hunt structure, memory, and continuity.
+
+- Stops duplication across hunts
+- Eliminates context lost in tickets and threads
+- Checks **semantically** whether a hunt has already been run — if not, it's net-new coverage
+- Automatically logs queries and validates them
+- Every hunt your team runs makes the next one smarter
+
+> GitHub: [Nebulock-Inc/agentic-threat-hunting-framework](https://github.com/Nebulock-Inc/agentic-threat-hunting-framework)
+
+---
+
+## The LOCK Pattern
+
+Every hunt follows the same loop:
+
+| Phase | What You Do |
+|---|---|
+| **Learn** | Gather CTI, alerts, anomalies — prepare the hunt |
+| **Observe** | Form the hypothesis; define normal vs. suspicious |
+| **Check** | Run and validate hunting queries |
+| **Keep** | Record findings, lessons, and next steps |
+
+LOCK keeps humans and AI aligned. It turns every hunt into a repeatable process instead of a one-off effort.
+
+---
+
+## Failure Is a Feature — If You Log It
+
+Corrections and dead ends documented in ATHF become **searchable artifacts**. That means a mistake documented today prevents the same mistake from being made again next quarter. Teams don't start from zero — they start from the **Keep phase** of the last hunt.
+
+Context works both ways: what you found matters, but so does what you ruled out and why.
+
+---
+
+## The Five Levels
+
+ATHF defines a maturity spectrum for agentic hunting:
+
+| Level | Capability |
+|---|---|
+| 0 | Manual — hunts buried in tickets and spreadsheets |
+| 1 | Structured markdown using LOCK — reliable history |
+| 2 | AI assistants read the repo — reasoning over hunt history |
+| 3 | AI connects to SIEM, EDR, and ticketing via MCP — autonomous query execution |
+| 4 | Multi-agent workflows with shared memory — continuous, autonomous hunting |
+
+You can reach Level 1 in a day. Level 2 in a week. You choose the pace.
+
+---
+
+## Key Takeaways
+
+- Shadow AI is already in your environment — **38% of orgs** confirmed
+- Agents are Shadow IT with superpowers: autonomous execution, external API keys, persistent memory
+- Hunt **behaviors and TTPs**, not tool names
+- ATHF gives every hunt structure and memory so nothing is ever lost
+- Failure is a feature — document it, and it becomes institutional knowledge
+- Investigations can and should escalate to hunts when scope demands it
